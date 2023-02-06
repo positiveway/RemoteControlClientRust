@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 
-uinput = { git = "https://github.com/positiveway/uinput_simple", branch = "master" }
+uinput = { git = "https://github.com/positiveway/mouse-keyboard-input", branch = "main" }

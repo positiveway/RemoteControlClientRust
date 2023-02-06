@@ -3,8 +3,8 @@ extern crate uinput;
 use std::net::UdpSocket;
 use std::thread;
 use std::time::Duration;
-use uinput::FakeDevice;
-use uinput::events::*;
+use uinput::VirtualDevice;
+use uinput::key_codes::*;
 
 
 fn to_num(one_byte: u8) -> i32 {
@@ -29,12 +29,14 @@ fn to_button(one_byte: u8) -> i32 {
 }
 
 fn main() {
-    let mut device = FakeDevice::new();
+    let mut device = VirtualDevice::new();
 
     let socket = match UdpSocket::bind("0.0.0.0:5005") {
         Ok(s) => s,
         Err(e) => panic!("couldn't bind socket: {}", e)
     };
+
+    println!("Listening at port 5005:");
 
     let mut msg = [0; 2];
     loop {
@@ -42,15 +44,14 @@ fn main() {
         if msg_len == 2 {
             if msg[0] == 128 {
                 let y = to_num(msg[1]);
-                device.move_mouse_or_wheel(REL_WHEEL, -y).unwrap();
+                device.scroll_vertical(y).unwrap();
             } else if msg[1] == 128 {
                 let x = to_num(msg[1]);
-                device.move_mouse_or_wheel(REL_HWHEEL, x).unwrap();
+                device.scroll_horizontal(x).unwrap();
             } else {
                 let x = to_num(msg[0]);
                 let y = to_num(msg[1]);
-                device.move_mouse_or_wheel(REL_X, x).unwrap();
-                device.move_mouse_or_wheel(REL_Y, -y).unwrap();
+                device.move_mouse(x, -y).unwrap();
             }
         } else if msg_len == 1 {
             if msg[0] > 128 {
@@ -60,6 +61,5 @@ fn main() {
                 device.release(to_button(msg[0])).unwrap();
             }
         }
-        device.synchronize().unwrap();
     }
 }
