@@ -1,10 +1,10 @@
-extern crate uinput;
+extern crate mouse_keyboard_input;
 
 use std::net::UdpSocket;
 use std::thread;
 use std::time::Duration;
-use uinput::VirtualDevice;
-use uinput::key_codes::*;
+use mouse_keyboard_input::VirtualDevice;
+use mouse_keyboard_input::key_codes::*;
 
 
 fn to_num(one_byte: u8) -> i32 {
