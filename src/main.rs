@@ -17,12 +17,12 @@ const LEFT_MOUSE: u8 = 90;
 const RIGHT_MOUSE: u8 = 91;
 const MIDDLE_MOUSE: u8 = 92;
 
-fn to_button(one_byte: u8) -> i32 {
+fn to_button(one_byte: u8) -> u16 {
     match one_byte {
         LEFT_MOUSE => BTN_LEFT,
         RIGHT_MOUSE => BTN_RIGHT,
         MIDDLE_MOUSE => BTN_MIDDLE,
-        _ => one_byte as i32,
+        _ => one_byte as u16,
     }
 }
 
