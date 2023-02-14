@@ -2,4 +2,4 @@
 set -e
 
 cd ../target/release/
-sudo nice -n -20 ./SocketControllerRust
+sudo nice -n -20 ./RemoteControllerRust
