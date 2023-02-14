@@ -1,8 +1,6 @@
 extern crate mouse_keyboard_input;
 
 use std::net::UdpSocket;
-use std::thread;
-use std::time::Duration;
 use mouse_keyboard_input::VirtualDevice;
 use mouse_keyboard_input::key_codes::*;
 
