@@ -106,18 +106,15 @@ fn parse_scroll(socket: UdpSocket, device: SharedDevice) {
 
 fn parse_button(socket: UdpSocket, device: SharedDevice) {
     let mut msg = [0; 1];
-    let mut button: u16;
     loop {
         socket.recv_from(&mut msg).unwrap();
         let mut locked_device = device.lock().unwrap();
 
-        button = to_button(msg[0]);
-
-        if button > 128 {
-            button -= 128;
-            locked_device.press(button).unwrap();
+        if msg[0] > 128 {
+            msg[0] -= 128;
+            locked_device.press(to_button(msg[0])).unwrap();
         } else {
-            locked_device.release(button).unwrap();
+            locked_device.release(to_button(msg[0])).unwrap();
         }
     }
 }
