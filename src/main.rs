@@ -3,6 +3,7 @@ extern crate mouse_keyboard_input;
 use std::borrow::BorrowMut;
 use std::io::Read;
 use std::net::{UdpSocket, TcpListener, TcpStream, Shutdown};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 use mouse_keyboard_input::VirtualDevice;
@@ -78,45 +79,50 @@ fn to_button(one_byte: u8) -> u16 {
 //     drop(tcp_listener);
 // }
 
-fn parse_mouse(socket: UdpSocket, device: &mut VirtualDevice) {
+type SharedDevice = Arc<Mutex<VirtualDevice>>;
+
+fn parse_mouse(socket: UdpSocket, device: SharedDevice) {
     let mut msg = [0; 2];
     loop {
         socket.recv_from(&mut msg).unwrap();
+        let mut locked_device = device.lock().unwrap();
 
         let x = to_num(msg[0]);
         let y = to_num(msg[1]);
-        device.move_mouse(x, -y).unwrap();
+        locked_device.move_mouse(x, -y).unwrap();
     }
 }
 
-fn parse_scroll(socket: UdpSocket, device: &mut VirtualDevice) {
+fn parse_scroll(socket: UdpSocket, device: SharedDevice) {
     let mut msg = [0; 1];
     loop {
         socket.recv_from(&mut msg).unwrap();
+        let mut locked_device = device.lock().unwrap();
 
         let y = to_num(msg[0]);
-        device.scroll_vertical(y).unwrap();
+        locked_device.scroll_vertical(y).unwrap();
     }
 }
 
-fn parse_button(socket: UdpSocket, device: &mut VirtualDevice) {
+fn parse_button(socket: UdpSocket, device: SharedDevice) {
     let mut msg = [0; 1];
     let mut button: u16;
     loop {
         socket.recv_from(&mut msg).unwrap();
+        let mut locked_device = device.lock().unwrap();
 
         button = to_button(msg[0]);
 
         if button > 128 {
             button -= 128;
-            device.press(button).unwrap();
+            locked_device.press(button).unwrap();
         } else {
-            device.release(button).unwrap();
+            locked_device.release(button).unwrap();
         }
     }
 }
 
-fn create_udp_thread(parse_func: fn(UdpSocket, &mut VirtualDevice), port: u16) -> JoinHandle<()> {
+fn create_udp_thread(parse_func: fn(UdpSocket, SharedDevice), port: u16, device: SharedDevice) -> JoinHandle<()> {
     thread::spawn(move || {
         // let address = format!("0.0.0.0:{}", port);
         let address = "0.0.0.0";
@@ -128,14 +134,14 @@ fn create_udp_thread(parse_func: fn(UdpSocket, &mut VirtualDevice), port: u16) -
 
         println!("UDP at port {}:", port);
 
-        let mut device = VirtualDevice::new();
-
-        parse_func(socket, device.borrow_mut());
+        parse_func(socket, device);
     })
 }
 
 fn main() {
-    create_udp_thread(parse_button, 5009);
-    create_udp_thread(parse_scroll, 5007);
-    create_udp_thread(parse_mouse, 5005).join().unwrap();
+    let mut device = Arc::new(Mutex::new(VirtualDevice::new()));
+
+    create_udp_thread(parse_button, 5009, device.clone());
+    create_udp_thread(parse_scroll, 5007, device.clone());
+    create_udp_thread(parse_mouse, 5005, device.clone()).join().unwrap();
 }
