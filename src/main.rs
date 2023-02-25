@@ -3,7 +3,6 @@ extern crate mouse_keyboard_input;
 use std::borrow::BorrowMut;
 use std::io::Read;
 use std::net::{UdpSocket, TcpListener, TcpStream, Shutdown};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
 use mouse_keyboard_input::VirtualDevice;
