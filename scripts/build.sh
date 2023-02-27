@@ -4,11 +4,13 @@ set -e
 # to request sudo in the beginning
 sudo uname -r
 
+cd ..
+rm -f ./Cargo.lock
+rm -rf ./target
+
 rustup update
 rustup default stable
 
-cd ..
-rm -rf ./target
 cargo build --release
 
 cd ./scripts
