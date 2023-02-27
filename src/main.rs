@@ -81,27 +81,27 @@ fn to_button(one_byte: u8) -> u16 {
 
 fn parse_mouse(socket: UdpSocket, device: &mut VirtualDevice) {
     let mut msg = [0; 2];
+
     loop {
         socket.recv_from(&mut msg).unwrap();
 
-        let x = to_num(msg[0]);
-        let y = to_num(msg[1]);
-        device.move_mouse(x, -y).unwrap();
+        device.move_mouse(to_num(msg[0]), to_num(msg[1])).unwrap();
     }
 }
 
 fn parse_scroll(socket: UdpSocket, device: &mut VirtualDevice) {
     let mut msg = [0; 1];
+
     loop {
         socket.recv_from(&mut msg).unwrap();
 
-        let y = to_num(msg[0]);
-        device.scroll_vertical(y).unwrap();
+        device.scroll_vertical(to_num(msg[0])).unwrap();
     }
 }
 
 fn parse_button(socket: UdpSocket, device: &mut VirtualDevice) {
     let mut msg = [0; 1];
+
     loop {
         socket.recv_from(&mut msg).unwrap();
 
@@ -127,7 +127,7 @@ fn create_udp_thread(parse_func: fn(UdpSocket, &mut VirtualDevice), port: u16) -
 
         let mut device = VirtualDevice::new();
 
-        parse_func(socket, device.borrow_mut());
+        parse_func(socket, &mut device);
     })
 }
 
