@@ -45,6 +45,9 @@ pub struct BaseEvent {
 
 type Instructions = Arc<Mutex<Vec<BaseEvent>>>;
 
+const SYNC_EVENT: BaseEvent = BaseEvent { kind: EV_SYN, code: SYN_REPORT, value: 0 };
+
+
 fn parse_button(socket: UdpSocket, instructions: Instructions) {
     let mut msg = [0; 1];
     let mut button: Button;
@@ -61,6 +64,7 @@ fn parse_button(socket: UdpSocket, instructions: Instructions) {
 
             let event = BaseEvent { kind: EV_KEY, code: button, value: 1 };
             instructions.push(event);
+            instructions.push(SYNC_EVENT);
         } else {
             button = to_button(button);
 
@@ -137,7 +141,6 @@ fn main() {
 
 
     let mut device = VirtualDevice::new();
-    let sync_event = BaseEvent { kind: EV_SYN, code: SYN_REPORT, value: 0 };
 
     const INTERVAL: Duration = Duration::from_millis(1);
 
@@ -148,7 +151,7 @@ fn main() {
     loop {
         let mut buffer = instructions.lock().unwrap();
 
-        buffer.push(sync_event);
+        buffer.push(SYNC_EVENT);
 
         for event in buffer.iter() {
             device.write(event.kind, event.code, event.value).unwrap();
