@@ -1,7 +1,7 @@
 extern crate mouse_keyboard_input;
 
 use std::net::UdpSocket;
-use std::ops::{Add, Sub};
+use std::ops::{Sub};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
@@ -127,10 +127,48 @@ fn create_udp_thread(parse_func: fn(UdpSocket, Instructions), port: u16, instruc
     })
 }
 
-fn write_every_ms(buff: Instructions) {}
+const INTERVAL: Duration = Duration::from_millis(10);
+
+
+fn write_every_ms(instructions: Instructions) -> JoinHandle<()> {
+    thread::spawn(move || {
+        let mut device = VirtualDevice::new();
+
+        let mut t0 = SystemTime::now();
+        let mut delta: Duration;
+
+        loop {
+            let mut buffer = instructions.lock().unwrap();
+
+            buffer.push(SYNC_EVENT);
+
+            for event in buffer.iter() {
+                device.write(event.kind, event.code, event.value).unwrap();
+            }
+
+            buffer.clear();
+            drop(buffer);
+
+            match t0.elapsed() {
+                Ok(passed) => {
+                    delta = INTERVAL.sub(passed);
+                    if delta > Duration::ZERO {
+                        // println!("delta: {}", delta.as_micros());
+                        sleep(delta)
+                    }
+                }
+                Err(e) => {
+                    println!("error: {}", e);
+                    sleep(INTERVAL)
+                }
+            };
+            t0 = SystemTime::now();
+        }
+    })
+}
 
 fn main() {
-    let mut instructions = Arc::new((Mutex::new(Vec::new())));
+    let instructions = Arc::new(Mutex::new(Vec::new()));
 
     let buff1 = instructions.clone();
     create_udp_thread(parse_button, 5009, buff1);
@@ -139,41 +177,6 @@ fn main() {
     let buff3 = instructions.clone();
     create_udp_thread(parse_mouse, 5005, buff3);
 
-
-    let mut device = VirtualDevice::new();
-
-    const INTERVAL: Duration = Duration::from_millis(1);
-
-    let mut t0 = SystemTime::now();
-    let mut counter = 0;
-    let mut delta: Duration;
-
-    loop {
-        let mut buffer = instructions.lock().unwrap();
-
-        buffer.push(SYNC_EVENT);
-
-        for event in buffer.iter() {
-            device.write(event.kind, event.code, event.value).unwrap();
-        }
-
-        buffer.clear();
-        drop(buffer);
-
-        counter += 1;
-        match t0.elapsed() {
-            Ok(passed) => {
-                delta = INTERVAL.sub(passed);
-                if delta > Duration::ZERO {
-                    // println!("delta: {}", delta.as_micros());
-                    sleep(delta)
-                }
-            }
-            Err(e) => {
-                println!("error: {}", e);
-                sleep(INTERVAL)
-            }
-        };
-        t0 = SystemTime::now();
-    }
+    let buff4 = instructions.clone();
+    write_every_ms(buff4).join().unwrap();
 }
