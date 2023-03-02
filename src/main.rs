@@ -127,7 +127,7 @@ fn create_udp_thread(parse_func: fn(UdpSocket, Instructions), port: u16, instruc
     })
 }
 
-const INTERVAL: Duration = Duration::from_millis(10);
+const INTERVAL: Duration = Duration::from_millis(5);
 
 
 fn write_every_ms(instructions: Instructions) -> JoinHandle<()> {
