@@ -1,8 +1,11 @@
 extern crate mouse_keyboard_input;
 
 use std::net::UdpSocket;
+use std::ops::{Add, Sub};
+use std::sync::{Arc, Mutex};
 use std::thread;
-use std::thread::JoinHandle;
+use std::thread::{JoinHandle, sleep};
+use std::time::{Duration, SystemTime};
 use mouse_keyboard_input::VirtualDevice;
 use mouse_keyboard_input::key_codes::*;
 
@@ -33,7 +36,16 @@ fn to_button(one_byte: Button) -> Button {
     }
 }
 
-fn parse_button(socket: UdpSocket, device: &mut SharedDevice) {
+#[derive(Clone, Copy)]
+pub struct BaseEvent {
+    pub kind: u16,
+    pub code: u16,
+    pub value: i32,
+}
+
+type Instructions = Arc<Mutex<Vec<BaseEvent>>>;
+
+fn parse_button(socket: UdpSocket, instructions: Instructions) {
     let mut msg = [0; 1];
     let mut button: Button;
 
@@ -41,18 +53,24 @@ fn parse_button(socket: UdpSocket, device: &mut SharedDevice) {
         socket.recv_from(&mut msg).unwrap();
         button = msg[0] as Button;
 
+        let mut instructions = instructions.lock().unwrap();
+
         if button > 128 {
             button -= 128;
             button = to_button(button);
-            device.press(button).unwrap();
+
+            let event = BaseEvent { kind: EV_KEY, code: button, value: 1 };
+            instructions.push(event);
         } else {
             button = to_button(button);
-            device.release(button).unwrap();
+
+            let event = BaseEvent { kind: EV_KEY, code: button, value: 0 };
+            instructions.push(event);
         }
     }
 }
 
-fn parse_scroll(socket: UdpSocket, device: &mut SharedDevice) {
+fn parse_scroll(socket: UdpSocket, instructions: Instructions) {
     let mut msg = [0; 1];
     let mut y: Coord;
 
@@ -61,11 +79,14 @@ fn parse_scroll(socket: UdpSocket, device: &mut SharedDevice) {
 
         y = to_num(msg[0]);
 
-        device.scroll_vertical(y).unwrap();
+        let event_y = BaseEvent { kind: EV_REL, code: REL_WHEEL, value: -y };
+
+        let mut instructions = instructions.lock().unwrap();
+        instructions.push(event_y);
     }
 }
 
-fn parse_mouse(socket: UdpSocket, device: &mut SharedDevice) {
+fn parse_mouse(socket: UdpSocket, instructions: Instructions) {
     let mut msg = [0; 2];
 
     let mut x: Coord;
@@ -77,11 +98,17 @@ fn parse_mouse(socket: UdpSocket, device: &mut SharedDevice) {
         x = to_num(msg[0]);
         y = to_num(msg[1]);
 
-        device.move_mouse(x, y).unwrap();
+        let event_x = BaseEvent { kind: EV_REL, code: REL_X, value: x };
+        let event_y = BaseEvent { kind: EV_REL, code: REL_Y, value: y };
+
+        let mut instructions = instructions.lock().unwrap();
+
+        instructions.push(event_x);
+        instructions.push(event_y);
     }
 }
 
-fn create_udp_thread(parse_func: fn(UdpSocket, &mut SharedDevice), port: u16) -> JoinHandle<()> {
+fn create_udp_thread(parse_func: fn(UdpSocket, Instructions), port: u16, instructions: Instructions) -> JoinHandle<()> {
     thread::spawn(move || {
         let address = "0.0.0.0";
 
@@ -92,14 +119,58 @@ fn create_udp_thread(parse_func: fn(UdpSocket, &mut SharedDevice), port: u16) ->
 
         println!("UDP at port {}:", port);
 
-        let mut device = VirtualDevice::new();
-
-        parse_func(socket, &mut device);
+        parse_func(socket, instructions);
     })
 }
 
+fn write_every_ms(buff: Instructions) {}
+
 fn main() {
-    create_udp_thread(parse_button, 5009);
-    create_udp_thread(parse_scroll, 5007);
-    create_udp_thread(parse_mouse, 5005).join().unwrap();
+    let mut instructions = Arc::new((Mutex::new(Vec::new())));
+
+    let buff1 = instructions.clone();
+    create_udp_thread(parse_button, 5009, buff1);
+    let buff2 = instructions.clone();
+    create_udp_thread(parse_scroll, 5007, buff2);
+    let buff3 = instructions.clone();
+    create_udp_thread(parse_mouse, 5005, buff3);
+
+
+    let mut device = VirtualDevice::new();
+    let sync_event = BaseEvent { kind: EV_SYN, code: SYN_REPORT, value: 0 };
+
+    const INTERVAL: Duration = Duration::from_millis(1);
+
+    let mut t0 = SystemTime::now();
+    let mut counter = 0;
+    let mut delta: Duration;
+
+    loop {
+        let mut buffer = instructions.lock().unwrap();
+
+        buffer.push(sync_event);
+
+        for event in buffer.iter() {
+            device.write(event.kind, event.code, event.value).unwrap();
+        }
+
+        buffer.clear();
+        drop(buffer);
+
+        counter += 1;
+        match t0.elapsed() {
+            Ok(passed) => {
+                delta = INTERVAL.sub(passed);
+                if delta > Duration::ZERO {
+                    // println!("delta: {}", delta.as_micros());
+                    sleep(delta)
+                }
+            }
+            Err(e) => {
+                println!("error: {}", e);
+                sleep(INTERVAL)
+            }
+        };
+        t0 = SystemTime::now();
+    }
 }
