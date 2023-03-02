@@ -10,8 +10,9 @@ use mouse_keyboard_input::key_codes::*;
 type SharedDevice = VirtualDevice;
 type Coord = i32;
 type Button = u16;
+type Byte = u8;
 
-fn to_num(one_byte: u8) -> Coord {
+fn to_num(one_byte: Byte) -> Coord {
     let mut num = one_byte as Coord;
     if num > 128 {
         num -= 256;
@@ -19,11 +20,11 @@ fn to_num(one_byte: u8) -> Coord {
     num
 }
 
-const LEFT_MOUSE: u8 = 90;
-const RIGHT_MOUSE: u8 = 91;
-const MIDDLE_MOUSE: u8 = 92;
+const LEFT_MOUSE: Button = 90;
+const RIGHT_MOUSE: Button = 91;
+const MIDDLE_MOUSE: Button = 92;
 
-fn to_button(one_byte: u8) -> Button {
+fn to_button(one_byte: Button) -> Button {
     match one_byte {
         LEFT_MOUSE => BTN_LEFT,
         RIGHT_MOUSE => BTN_RIGHT,
@@ -38,13 +39,14 @@ fn parse_button(socket: UdpSocket, device: &mut SharedDevice) {
 
     loop {
         socket.recv_from(&mut msg).unwrap();
+        button = msg[0] as Button;
 
-        if msg[0] > 128 {
-            msg[0] -= 128;
-            button = to_button(msg[0]);
+        if button > 128 {
+            button -= 128;
+            button = to_button(button);
             device.press(button).unwrap();
         } else {
-            button = to_button(msg[0]);
+            button = to_button(button);
             device.release(button).unwrap();
         }
     }
