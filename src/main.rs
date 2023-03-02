@@ -34,26 +34,32 @@ fn to_button(one_byte: u8) -> Button {
 
 fn parse_button(socket: UdpSocket, device: &mut SharedDevice) {
     let mut msg = [0; 1];
+    let mut button: Button;
 
     loop {
         socket.recv_from(&mut msg).unwrap();
 
         if msg[0] > 128 {
             msg[0] -= 128;
-            device.press(to_button(msg[0])).unwrap();
+            button = to_button(msg[0]);
+            device.press(button).unwrap();
         } else {
-            device.release(to_button(msg[0])).unwrap();
+            button = to_button(msg[0]);
+            device.release(button).unwrap();
         }
     }
 }
 
 fn parse_scroll(socket: UdpSocket, device: &mut SharedDevice) {
     let mut msg = [0; 1];
+    let mut y: Coord;
 
     loop {
         socket.recv_from(&mut msg).unwrap();
 
-        device.scroll_vertical(to_num(msg[0])).unwrap();
+        y = to_num(msg[0]);
+
+        device.scroll_vertical(y).unwrap();
     }
 }
 
