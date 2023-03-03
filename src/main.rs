@@ -6,13 +6,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
 use std::time::{Duration, SystemTime};
-use mouse_keyboard_input::VirtualDevice;
+use mouse_keyboard_input::{VirtualDevice, Button, Coord};
 use mouse_keyboard_input::key_codes::*;
 
 
-type SharedDevice = VirtualDevice;
-type Coord = i32;
-type Button = u16;
+type SharedDevice = Arc<Mutex<VirtualDevice>>;
 type Byte = u8;
 
 fn to_num(one_byte: Byte) -> Coord {
@@ -36,19 +34,7 @@ fn to_button(one_byte: Button) -> Button {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct BaseEvent {
-    pub kind: u16,
-    pub code: u16,
-    pub value: i32,
-}
-
-type Instructions = Arc<Mutex<Vec<BaseEvent>>>;
-
-const SYNC_EVENT: BaseEvent = BaseEvent { kind: EV_SYN, code: SYN_REPORT, value: 0 };
-
-
-fn parse_button(socket: UdpSocket, instructions: Instructions) {
+fn parse_button(socket: UdpSocket, device: SharedDevice) {
     let mut msg = [0; 1];
     let mut button: Button;
 
@@ -56,41 +42,35 @@ fn parse_button(socket: UdpSocket, instructions: Instructions) {
         socket.recv_from(&mut msg).unwrap();
         button = msg[0] as Button;
 
-        let mut instructions = instructions.lock().unwrap();
+        let mut device = device.lock().unwrap();
 
         if button > 128 {
             button -= 128;
             button = to_button(button);
-
-            let event = BaseEvent { kind: EV_KEY, code: button, value: 1 };
-            instructions.push(event);
-            instructions.push(SYNC_EVENT);
+            device.buffer_add_press(button);
         } else {
             button = to_button(button);
-
-            let event = BaseEvent { kind: EV_KEY, code: button, value: 0 };
-            instructions.push(event);
+            device.buffer_add_release(button);
         }
     }
 }
 
-fn parse_scroll(socket: UdpSocket, instructions: Instructions) {
+fn parse_scroll(socket: UdpSocket, device: SharedDevice) {
     let mut msg = [0; 1];
     let mut y: Coord;
 
     loop {
         socket.recv_from(&mut msg).unwrap();
 
+        let mut device = device.lock().unwrap();
+
         y = to_num(msg[0]);
 
-        let event_y = BaseEvent { kind: EV_REL, code: REL_WHEEL, value: -y };
-
-        let mut instructions = instructions.lock().unwrap();
-        instructions.push(event_y);
+        device.buffer_add_scroll_vertical(y);
     }
 }
 
-fn parse_mouse(socket: UdpSocket, instructions: Instructions) {
+fn parse_mouse(socket: UdpSocket, device: SharedDevice) {
     let mut msg = [0; 2];
 
     let mut x: Coord;
@@ -99,20 +79,16 @@ fn parse_mouse(socket: UdpSocket, instructions: Instructions) {
     loop {
         socket.recv_from(&mut msg).unwrap();
 
+        let mut device = device.lock().unwrap();
+
         x = to_num(msg[0]);
         y = to_num(msg[1]);
 
-        let event_x = BaseEvent { kind: EV_REL, code: REL_X, value: x };
-        let event_y = BaseEvent { kind: EV_REL, code: REL_Y, value: y };
-
-        let mut instructions = instructions.lock().unwrap();
-
-        instructions.push(event_x);
-        instructions.push(event_y);
+        device.buffer_add_mouse_move(x, y);
     }
 }
 
-fn create_udp_thread(parse_func: fn(UdpSocket, Instructions), port: u16, instructions: Instructions) -> JoinHandle<()> {
+fn create_udp_thread(parse_func: fn(UdpSocket, device: SharedDevice), port: u16, device: SharedDevice) -> JoinHandle<()> {
     thread::spawn(move || {
         let address = "0.0.0.0";
 
@@ -123,31 +99,22 @@ fn create_udp_thread(parse_func: fn(UdpSocket, Instructions), port: u16, instruc
 
         println!("UDP at port {}:", port);
 
-        parse_func(socket, instructions);
+        parse_func(socket, device);
     })
 }
 
-const INTERVAL: Duration = Duration::from_millis(5);
+const INTERVAL: Duration = Duration::from_millis(2);
 
 
-fn write_every_ms(instructions: Instructions) -> JoinHandle<()> {
+fn write_every_ms(device: SharedDevice) -> JoinHandle<()> {
     thread::spawn(move || {
-        let mut device = VirtualDevice::new();
-
         let mut t0 = SystemTime::now();
         let mut delta: Duration;
 
         loop {
-            let mut buffer = instructions.lock().unwrap();
-
-            buffer.push(SYNC_EVENT);
-
-            for event in buffer.iter() {
-                device.write(event.kind, event.code, event.value).unwrap();
-            }
-
-            buffer.clear();
-            drop(buffer);
+            let mut device = device.lock().unwrap();
+            device.write_buffer_to_disk().unwrap();
+            drop(device);
 
             match t0.elapsed() {
                 Ok(passed) => {
@@ -168,15 +135,11 @@ fn write_every_ms(instructions: Instructions) -> JoinHandle<()> {
 }
 
 fn main() {
-    let instructions = Arc::new(Mutex::new(Vec::new()));
+    let device = Arc::new(Mutex::new(VirtualDevice::new().unwrap()));
 
-    let buff1 = instructions.clone();
-    create_udp_thread(parse_button, 5009, buff1);
-    let buff2 = instructions.clone();
-    create_udp_thread(parse_scroll, 5007, buff2);
-    let buff3 = instructions.clone();
-    create_udp_thread(parse_mouse, 5005, buff3);
+    create_udp_thread(parse_button, 5009, device.clone());
+    create_udp_thread(parse_scroll, 5007, device.clone());
+    create_udp_thread(parse_mouse, 5005, device.clone());
 
-    let buff4 = instructions.clone();
-    write_every_ms(buff4).join().unwrap();
+    write_every_ms(device.clone()).join().unwrap();
 }
