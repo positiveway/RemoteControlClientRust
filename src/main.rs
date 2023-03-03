@@ -1,13 +1,12 @@
 extern crate mouse_keyboard_input;
 
-use std::borrow::{Borrow, BorrowMut};
 use std::net::UdpSocket;
 use std::ops::{Sub};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
 use std::time::{Duration, SystemTime};
-use mouse_keyboard_input::{VirtualDevice, Button, Coord, ChannelSender, send_press, send_release, send_scroll_vertical, send_mouse_move};
+use mouse_keyboard_input::{VirtualDevice, Button, Coord, ChannelSender,
+                           send_press, send_release, send_scroll_vertical, send_mouse_move};
 use mouse_keyboard_input::key_codes::*;
 
 type Byte = u8;
@@ -78,7 +77,7 @@ fn parse_mouse(socket: UdpSocket, sender: ChannelSender) {
         x = to_num(msg[0]);
         y = to_num(msg[1]);
 
-        send_mouse_move(x,y, sender.to_owned()).unwrap();
+        send_mouse_move(x, y, sender.to_owned()).unwrap();
     }
 }
 
