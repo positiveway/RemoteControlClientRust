@@ -7,11 +7,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
 use std::time::{Duration, SystemTime};
-use mouse_keyboard_input::{VirtualDevice, Button, Coord, ChannelSender, EventParams, send_press, send_release, send_scroll_vertical, send_mouse_move};
+use mouse_keyboard_input::{VirtualDevice, Button, Coord, ChannelSender, send_press, send_release, send_scroll_vertical, send_mouse_move};
 use mouse_keyboard_input::key_codes::*;
 
-
-type SharedDevice = Arc<Mutex<VirtualDevice>>;
 type Byte = u8;
 
 fn to_num(one_byte: Byte) -> Coord {
@@ -46,10 +44,10 @@ fn parse_button(socket: UdpSocket, sender: ChannelSender) {
         if button > 128 {
             button -= 128;
             button = to_button(button);
-            send_press(button, sender.borrow().to_owned()).unwrap();
+            send_press(button, sender.to_owned()).unwrap();
         } else {
             button = to_button(button);
-            send_release(button, sender.borrow().to_owned()).unwrap();
+            send_release(button, sender.to_owned()).unwrap();
         }
     }
 }
@@ -64,7 +62,7 @@ fn parse_scroll(socket: UdpSocket, sender: ChannelSender) {
 
         y = to_num(msg[0]);
 
-        send_scroll_vertical(y, sender.borrow().to_owned()).unwrap();
+        send_scroll_vertical(y, sender.to_owned()).unwrap();
     }
 }
 
@@ -80,7 +78,7 @@ fn parse_mouse(socket: UdpSocket, sender: ChannelSender) {
         x = to_num(msg[0]);
         y = to_num(msg[1]);
 
-        send_mouse_move(x,y, sender.borrow().to_owned()).unwrap();
+        send_mouse_move(x,y, sender.to_owned()).unwrap();
     }
 }
 
