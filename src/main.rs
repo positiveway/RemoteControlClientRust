@@ -1,12 +1,13 @@
 extern crate mouse_keyboard_input;
 
+use std::borrow::{Borrow, BorrowMut};
 use std::net::UdpSocket;
 use std::ops::{Sub};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
 use std::time::{Duration, SystemTime};
-use mouse_keyboard_input::{VirtualDevice, Button, Coord};
+use mouse_keyboard_input::{VirtualDevice, Button, Coord, ChannelSender, EventParams, send_press, send_release, send_scroll_vertical, send_mouse_move};
 use mouse_keyboard_input::key_codes::*;
 
 
@@ -34,7 +35,7 @@ fn to_button(one_byte: Button) -> Button {
     }
 }
 
-fn parse_button(socket: UdpSocket, device: SharedDevice) {
+fn parse_button(socket: UdpSocket, sender: ChannelSender) {
     let mut msg = [0; 1];
     let mut button: Button;
 
@@ -42,35 +43,32 @@ fn parse_button(socket: UdpSocket, device: SharedDevice) {
         socket.recv_from(&mut msg).unwrap();
         button = msg[0] as Button;
 
-        let mut device = device.lock().unwrap();
-
         if button > 128 {
             button -= 128;
             button = to_button(button);
-            device.buffer_add_press(button);
+            send_press(button, sender.borrow().to_owned()).unwrap();
         } else {
             button = to_button(button);
-            device.buffer_add_release(button);
+            send_release(button, sender.borrow().to_owned()).unwrap();
         }
     }
 }
 
-fn parse_scroll(socket: UdpSocket, device: SharedDevice) {
+fn parse_scroll(socket: UdpSocket, sender: ChannelSender) {
     let mut msg = [0; 1];
     let mut y: Coord;
 
     loop {
         socket.recv_from(&mut msg).unwrap();
 
-        let mut device = device.lock().unwrap();
 
         y = to_num(msg[0]);
 
-        device.buffer_add_scroll_vertical(y);
+        send_scroll_vertical(y, sender.borrow().to_owned()).unwrap();
     }
 }
 
-fn parse_mouse(socket: UdpSocket, device: SharedDevice) {
+fn parse_mouse(socket: UdpSocket, sender: ChannelSender) {
     let mut msg = [0; 2];
 
     let mut x: Coord;
@@ -79,16 +77,14 @@ fn parse_mouse(socket: UdpSocket, device: SharedDevice) {
     loop {
         socket.recv_from(&mut msg).unwrap();
 
-        let mut device = device.lock().unwrap();
-
         x = to_num(msg[0]);
         y = to_num(msg[1]);
 
-        device.buffer_add_mouse_move(x, y);
+        send_mouse_move(x,y, sender.borrow().to_owned()).unwrap();
     }
 }
 
-fn create_udp_thread(parse_func: fn(UdpSocket, device: SharedDevice), port: u16, device: SharedDevice) -> JoinHandle<()> {
+fn create_udp_thread(parse_func: fn(UdpSocket, ChannelSender), port: u16, sender: ChannelSender) -> JoinHandle<()> {
     thread::spawn(move || {
         let address = "0.0.0.0";
 
@@ -99,22 +95,20 @@ fn create_udp_thread(parse_func: fn(UdpSocket, device: SharedDevice), port: u16,
 
         println!("UDP at port {}:", port);
 
-        parse_func(socket, device);
+        parse_func(socket, sender);
     })
 }
 
 const INTERVAL: Duration = Duration::from_millis(2);
 
 
-fn write_every_ms(device: SharedDevice) -> JoinHandle<()> {
+fn write_every_ms(mut device: VirtualDevice) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut t0 = SystemTime::now();
         let mut delta: Duration;
 
         loop {
-            let mut device = device.lock().unwrap();
-            device.write_buffer_to_disk().unwrap();
-            drop(device);
+            device.write_events_from_channel_buffered().unwrap();
 
             match t0.elapsed() {
                 Ok(passed) => {
@@ -135,11 +129,11 @@ fn write_every_ms(device: SharedDevice) -> JoinHandle<()> {
 }
 
 fn main() {
-    let device = Arc::new(Mutex::new(VirtualDevice::new().unwrap()));
+    let mut device = VirtualDevice::default().unwrap();
 
-    create_udp_thread(parse_button, 5009, device.clone());
-    create_udp_thread(parse_scroll, 5007, device.clone());
-    create_udp_thread(parse_mouse, 5005, device.clone());
+    create_udp_thread(parse_button, 5009, device.sender.clone());
+    create_udp_thread(parse_scroll, 5007, device.sender.clone());
+    create_udp_thread(parse_mouse, 5005, device.sender.clone());
 
-    write_every_ms(device.clone()).join().unwrap();
+    write_every_ms(device).join().unwrap();
 }
