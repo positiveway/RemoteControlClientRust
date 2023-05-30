@@ -35,8 +35,10 @@ then
   RUSTFLAGS="-Z polonius $RUSTFLAGS"
 fi
 
+echo $RUSTFLAGS
+
 # release build
-cargo build --release
+cargo +$rust_version rustc --release -- $RUSTFLAGS
 
 # polonius debug build
 #cargo +nightly rustc -- -Z polonius
