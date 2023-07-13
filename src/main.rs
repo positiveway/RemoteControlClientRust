@@ -1,10 +1,9 @@
 extern crate mouse_keyboard_input;
 
 use std::net::UdpSocket;
-use std::ops::{Sub};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 use mouse_keyboard_input::{VirtualDevice, Button, Coord, ChannelSender,
                            send_press, send_release, send_scroll_vertical, send_mouse_move};
 use mouse_keyboard_input::key_codes::*;
@@ -96,33 +95,25 @@ fn create_udp_thread(parse_func: fn(UdpSocket, ChannelSender), port: u16, sender
     })
 }
 
-const INTERVAL: Duration = Duration::from_millis(2);
+const writing_interval: Duration = Duration::from_millis(2);
 
 
-fn write_every_ms(mut device: VirtualDevice) -> JoinHandle<()> {
-    thread::spawn(move || {
-        let mut t0 = SystemTime::now();
-        let mut delta: Duration;
-
+fn write_every_ms(mut device: VirtualDevice) {
+    let scheduler = thread::spawn(move || {
         loop {
-            device.write_events_from_channel_buffered().unwrap();
+            let start = Instant::now();
 
-            match t0.elapsed() {
-                Ok(passed) => {
-                    delta = INTERVAL.sub(passed);
-                    if delta > Duration::ZERO {
-                        // println!("delta: {}", delta.as_micros());
-                        sleep(delta)
-                    }
-                }
-                Err(e) => {
-                    println!("error: {}", e);
-                    sleep(INTERVAL)
-                }
-            };
-            t0 = SystemTime::now();
+            device.write_events_from_channel().unwrap();
+
+            let runtime = start.elapsed();
+
+            if let Some(remaining) = writing_interval.checked_sub(runtime) {
+                sleep(remaining);
+            }
         }
-    })
+    });
+
+    scheduler.join().expect("Scheduler panicked");
 }
 
 fn main() {
@@ -132,5 +123,5 @@ fn main() {
     create_udp_thread(parse_scroll, 5007, device.sender.clone());
     create_udp_thread(parse_mouse, 5005, device.sender.clone());
 
-    write_every_ms(device).join().unwrap();
+    write_every_ms(device);
 }
