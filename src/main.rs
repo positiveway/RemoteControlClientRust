@@ -95,7 +95,7 @@ fn create_udp_thread(parse_func: fn(UdpSocket, ChannelSender), port: u16, sender
     })
 }
 
-const writing_interval: Duration = Duration::from_millis(2);
+const writing_interval: Duration = Duration::from_millis(1);
 
 
 fn write_every_ms(mut device: VirtualDevice) {
