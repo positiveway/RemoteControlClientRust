@@ -4,9 +4,7 @@ use std::net::UdpSocket;
 use std::thread;
 use std::thread::{JoinHandle, sleep};
 use std::time::{Duration, Instant};
-use mouse_keyboard_input::{VirtualDevice, Button, Coord, ChannelSender,
-                           send_press, send_release, send_scroll_vertical, send_mouse_move};
-use mouse_keyboard_input::key_codes::*;
+use mouse_keyboard_input::*;
 
 type Byte = u8;
 
@@ -31,56 +29,65 @@ fn to_button(one_byte: Button) -> Button {
     }
 }
 
-fn parse_button(socket: UdpSocket, sender: ChannelSender) {
+fn parse_btn_press(socket: UdpSocket, sender: &ChannelSender) {
     let mut msg = [0; 1];
-    let mut button: Button;
 
     loop {
         socket.recv_from(&mut msg).unwrap();
-        button = msg[0] as Button;
-
-        if button > 128 {
-            button -= 128;
-            button = to_button(button);
-            send_press(button, sender.to_owned()).unwrap();
-        } else {
-            button = to_button(button);
-            send_release(button, sender.to_owned()).unwrap();
-        }
+        send_press(msg[0] as Button, sender).unwrap();
     }
 }
 
-fn parse_scroll(socket: UdpSocket, sender: ChannelSender) {
+fn parse_btn_release(socket: UdpSocket, sender: &ChannelSender) {
     let mut msg = [0; 1];
-    let mut y: Coord;
+
+    loop {
+        socket.recv_from(&mut msg).unwrap();
+        send_release(msg[0] as Button, sender).unwrap();
+    }
+}
+
+fn parse_scroll(socket: UdpSocket, sender: &ChannelSender) {
+    let mut msg = [0; 1];
+    let mut move_by: Coord;
 
     loop {
         socket.recv_from(&mut msg).unwrap();
 
+        move_by = to_num(msg[0]);
 
-        y = to_num(msg[0]);
-
-        send_scroll_vertical(y, sender.to_owned()).unwrap();
+        send_scroll_y(move_by, sender).unwrap();
     }
 }
 
-fn parse_mouse(socket: UdpSocket, sender: ChannelSender) {
-    let mut msg = [0; 2];
-
-    let mut x: Coord;
-    let mut y: Coord;
+fn parse_mouse_x(socket: UdpSocket, sender: &ChannelSender) {
+    let mut msg = [0; 1];
+    let mut move_by: Coord;
 
     loop {
         socket.recv_from(&mut msg).unwrap();
 
-        x = to_num(msg[0]);
-        y = to_num(msg[1]);
+        move_by = to_num(msg[0]);
 
-        send_mouse_move(x, y, sender.to_owned()).unwrap();
+        send_mouse_move_x(move_by, sender).unwrap();
     }
 }
 
-fn create_udp_thread(parse_func: fn(UdpSocket, ChannelSender), port: u16, sender: ChannelSender) -> JoinHandle<()> {
+fn parse_mouse_y(socket: UdpSocket, sender: &ChannelSender) {
+    let mut msg = [0; 1];
+    let mut move_by: Coord;
+
+    loop {
+        socket.recv_from(&mut msg).unwrap();
+
+        move_by = to_num(msg[0]);
+
+        send_mouse_move_y(move_by, sender).unwrap();
+    }
+}
+
+
+fn create_udp_thread(parse_func: fn(UdpSocket, &ChannelSender), port: u16, sender: ChannelSender) -> JoinHandle<()> {
     thread::spawn(move || {
         let address = "0.0.0.0";
 
@@ -91,37 +98,30 @@ fn create_udp_thread(parse_func: fn(UdpSocket, ChannelSender), port: u16, sender
 
         println!("UDP at port {}:", port);
 
-        parse_func(socket, sender);
+        parse_func(socket, &sender);
     })
 }
 
-const writing_interval: Duration = Duration::from_millis(1);
+const WRITING_INTERVAL: Duration = Duration::from_millis(1);
 
 
-fn write_every_ms(mut device: VirtualDevice) {
-    let scheduler = thread::spawn(move || {
-        loop {
-            let start = Instant::now();
+const MOUSE_PORT_X: u16 = 5004;
+const MOUSE_PORT_Y: u16 = 5005;
 
-            device.write_events_from_channel().unwrap();
+const SCROLL_PORT_X: u16 = 5006;
+const SCROLL_PORT_Y: u16 = 5007;
 
-            let runtime = start.elapsed();
-
-            if let Some(remaining) = writing_interval.checked_sub(runtime) {
-                sleep(remaining);
-            }
-        }
-    });
-
-    scheduler.join().expect("Scheduler panicked");
-}
+const PRESS_BTN_PORT: u16 = 5008;
+const RELEASE_BTN_PORT: u16 = 5009;
 
 fn main() {
     let mut device = VirtualDevice::default().unwrap();
 
-    create_udp_thread(parse_button, 5009, device.sender.clone());
-    create_udp_thread(parse_scroll, 5007, device.sender.clone());
-    create_udp_thread(parse_mouse, 5005, device.sender.clone());
+    create_udp_thread(parse_btn_press, PRESS_BTN_PORT, device.sender.clone());
+    create_udp_thread(parse_btn_release, RELEASE_BTN_PORT, device.sender.clone());
+    create_udp_thread(parse_mouse_x, MOUSE_PORT_X, device.sender.clone());
+    create_udp_thread(parse_mouse_y, MOUSE_PORT_Y, device.sender.clone());
+    create_udp_thread(parse_scroll, SCROLL_PORT_Y, device.sender.clone());
 
-    write_every_ms(device);
+    device.write_from_channel_every_ms();
 }
