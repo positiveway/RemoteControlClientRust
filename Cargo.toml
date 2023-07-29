@@ -5,6 +5,8 @@ edition = "2021"
 
 
 [dependencies]
+bytes = "1.4"
+lazy_static = "1.4"
 #async-std = { version = "1.12.0", features = ["attributes"] }
 #async-std-hidg = "0.1.0"
 #hidg="0.1.0"

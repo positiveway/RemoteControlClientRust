@@ -1,10 +1,15 @@
-extern crate mouse_keyboard_input;
+mod bytes_convert;
 
-use std::net::UdpSocket;
+use std::io::{Read, Write};
+use std::net::{Shutdown, TcpListener, TcpStream, UdpSocket};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
 use std::time::{Duration, Instant};
 use mouse_keyboard_input::*;
+use bytes::{BufMut, BytesMut, Bytes};
+use lazy_static::lazy_static;
+use bytes_convert::*;
+
 
 type Byte = u8;
 
@@ -35,6 +40,7 @@ fn parse_btn_press(socket: UdpSocket, sender: &ChannelSender) {
     loop {
         socket.recv_from(&mut msg).unwrap();
         send_press(msg[0] as Button, sender).unwrap();
+        println!("Button pressed: {}", msg[0] as Button);
     }
 }
 
@@ -44,6 +50,8 @@ fn parse_btn_release(socket: UdpSocket, sender: &ChannelSender) {
     loop {
         socket.recv_from(&mut msg).unwrap();
         send_release(msg[0] as Button, sender).unwrap();
+        println!("Button released: {}", msg[0] as Button);
+
     }
 }
 
@@ -102,8 +110,59 @@ fn create_udp_thread(parse_func: fn(UdpSocket, &ChannelSender), port: u16, sende
     })
 }
 
+
+const SCREEN_SIZE_X: u32 = 1080;
+const SCREEN_SIZE_Y: u32 = 1920;
+
+lazy_static!{
+    static ref SCREEN_SIZE_BYTES: Bytes = to_bytes(vec![SCREEN_SIZE_X, SCREEN_SIZE_Y]);
+}
+
+fn handle_client(mut stream: TcpStream, screen_size: Bytes) {
+    let mut data = [0u8; 1];
+    while match stream.read(&mut data) {
+        Ok(size) => {
+            stream.write(screen_size.as_ref()).unwrap();
+            true
+        },
+        Err(_) => {
+            println!("An error occurred, terminating connection with {}", stream.peer_addr().unwrap());
+            stream.shutdown(Shutdown::Both).unwrap();
+            false
+        }
+    } {}
+}
+
+fn create_tcp_listener(){
+    let addr = format!("0.0.0.0:{}", &TCP_PORT);
+    let listener = TcpListener::bind(addr).unwrap();
+
+
+    // accept connections and process them, spawning a new thread for each one
+    println!("TCP Server listening on port {}", &TCP_PORT);
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                println!("New connection: {}", stream.peer_addr().unwrap());
+                thread::spawn(move|| {
+                    // connection succeeded
+                    handle_client(stream, SCREEN_SIZE_BYTES.clone())
+                });
+            }
+            Err(e) => {
+                println!("Error: {}", e);
+                /* connection failed */
+            }
+        }
+    }
+    // close the socket server
+    drop(listener);
+}
+
+
 const WRITING_INTERVAL: Duration = Duration::from_millis(1);
 
+const TCP_PORT: u16 = 5100;
 
 const MOUSE_PORT_X: u16 = 5004;
 const MOUSE_PORT_Y: u16 = 5005;
@@ -115,6 +174,11 @@ const PRESS_BTN_PORT: u16 = 5008;
 const RELEASE_BTN_PORT: u16 = 5009;
 
 fn main() {
+    let a = -2i8;
+    let mut buf = BytesMut::new();
+    a.to_bytes(&mut buf);
+    println!("{}", buf.len());
+
     let mut device = VirtualDevice::default().unwrap();
 
     create_udp_thread(parse_btn_press, PRESS_BTN_PORT, device.sender.clone());
