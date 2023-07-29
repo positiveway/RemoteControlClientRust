@@ -133,30 +133,32 @@ fn handle_client(mut stream: TcpStream, screen_size: Vec<u8>) {
     } {}
 }
 
-fn create_tcp_listener() {
-    let addr = format!("0.0.0.0:{}", &TCP_PORT);
-    let listener = TcpListener::bind(addr).unwrap();
+fn create_tcp_listener() -> JoinHandle<()> {
+    thread::spawn(move || {
+        let addr = format!("0.0.0.0:{}", &TCP_PORT);
+        let listener = TcpListener::bind(addr).unwrap();
 
 
-    // accept connections and process them, spawning a new thread for each one
-    println!("TCP Server listening on port {}", &TCP_PORT);
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                println!("New connection: {}", stream.peer_addr().unwrap());
-                thread::spawn(move || {
-                    // connection succeeded
-                    handle_client(stream, SCREEN_SIZE_BYTES.clone())
-                });
-            }
-            Err(e) => {
-                println!("Error: {}", e);
-                /* connection failed */
+        // accept connections and process them, spawning a new thread for each one
+        println!("TCP at port {}", &TCP_PORT);
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    println!("New connection: {}", stream.peer_addr().unwrap());
+                    thread::spawn(move || {
+                        // connection succeeded
+                        handle_client(stream, SCREEN_SIZE_BYTES.clone())
+                    });
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                    /* connection failed */
+                }
             }
         }
-    }
-    // close the socket server
-    drop(listener);
+        // close the socket server
+        drop(listener);
+    })
 }
 
 
@@ -175,6 +177,8 @@ const RELEASE_BTN_PORT: u16 = 5009;
 
 fn main() {
     let mut device = VirtualDevice::default().unwrap();
+
+    create_tcp_listener();
 
     create_udp_thread(parse_btn_press, PRESS_BTN_PORT, device.sender.clone());
     create_udp_thread(parse_btn_release, RELEASE_BTN_PORT, device.sender.clone());
