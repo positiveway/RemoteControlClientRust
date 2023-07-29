@@ -1,3 +1,5 @@
+extern crate core;
+
 mod bytes_convert;
 
 use std::io::{Read, Write};
@@ -115,14 +117,14 @@ const SCREEN_SIZE_X: u32 = 1080;
 const SCREEN_SIZE_Y: u32 = 1920;
 
 lazy_static!{
-    static ref SCREEN_SIZE_BYTES: Bytes = to_bytes(vec![SCREEN_SIZE_X, SCREEN_SIZE_Y]);
+    static ref SCREEN_SIZE_BYTES: Vec<u8> = to_bytes(&[SCREEN_SIZE_X, SCREEN_SIZE_Y]);
 }
 
-fn handle_client(mut stream: TcpStream, screen_size: Bytes) {
+fn handle_client(mut stream: TcpStream, screen_size: Vec<u8>) {
     let mut data = [0u8; 1];
     while match stream.read(&mut data) {
         Ok(size) => {
-            stream.write(screen_size.as_ref()).unwrap();
+            stream.write(screen_size.as_slice()).unwrap();
             true
         },
         Err(_) => {
@@ -174,10 +176,13 @@ const PRESS_BTN_PORT: u16 = 5008;
 const RELEASE_BTN_PORT: u16 = 5009;
 
 fn main() {
-    let a = -2i8;
-    let mut buf = BytesMut::new();
-    a.to_bytes(&mut buf);
-    println!("{}", buf.len());
+    // let buf = to_bytes(&[-2i16, -3i16]);
+    // println!("{}", buf.len());
+    //
+    // let c: Vec<i16> = from_bytes(buf);
+    // for item in &c{
+    //     println!("{}", item)
+    // };
 
     let mut device = VirtualDevice::default().unwrap();
 

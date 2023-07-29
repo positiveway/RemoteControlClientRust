@@ -1,75 +1,75 @@
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BytesMut};
 
 pub trait ToBytes {
-    fn to_bytes(self, buf: &mut BytesMut);
+    fn to_bytes(&self) -> Vec<u8>;
 }
 
 impl ToBytes for u8 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_u8(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
 impl ToBytes for i8 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_i8(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
 impl ToBytes for u16 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_u16(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
 impl ToBytes for i16 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_i16(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
 impl ToBytes for u32 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_u32(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
 impl ToBytes for i32 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_i32(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
 impl ToBytes for u64 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_u64(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
 impl ToBytes for i64 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_i64(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
 impl ToBytes for f32 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_f32(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
 impl ToBytes for f64 {
-    fn to_bytes(self, buf: &mut BytesMut) {
-        buf.put_f64(self)
+    fn to_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
     }
 }
 
-pub fn to_bytes<T: ToBytes>(values: Vec<T>) -> Bytes {
-    let mut buf = BytesMut::new();
-    for value in values {
-        value.to_bytes(&mut buf);
+pub fn to_bytes<T: ToBytes, S: AsRef<[T]>>(values: S) -> Vec<u8> {
+    let mut buf = vec![];
+    for value in values.as_ref() {
+        buf.extend(value.to_bytes());
     }
-    buf.freeze()
+    buf
 }
 
 pub trait FromBytes<T> {
@@ -136,10 +136,12 @@ impl FromBytes<f64> for f64 {
     }
 }
 
-pub fn from_bytes<T: FromBytes<T>>(buf: &mut BytesMut) -> Vec<T> {
+pub fn from_bytes<T: FromBytes<T>, S: AsRef<[u8]>>(buf: S) -> Vec<T> {
+    let mut buf = BytesMut::from(buf.as_ref());
+
     let mut values: Vec<T> = vec![];
     while !buf.is_empty() {
-        let converted = T::from_bytes(buf);
+        let converted = T::from_bytes(&mut buf);
         values.push(converted);
     }
     values
