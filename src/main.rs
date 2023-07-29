@@ -1,16 +1,11 @@
-extern crate core;
-
-mod bytes_convert;
-
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream, UdpSocket};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
 use std::time::{Duration, Instant};
 use mouse_keyboard_input::*;
-use bytes::{BufMut, BytesMut, Bytes};
 use lazy_static::lazy_static;
-use bytes_convert::*;
+use bytes_convert::{from_bytes, to_bytes};
 
 
 type Byte = u8;
@@ -53,7 +48,6 @@ fn parse_btn_release(socket: UdpSocket, sender: &ChannelSender) {
         socket.recv_from(&mut msg).unwrap();
         send_release(msg[0] as Button, sender).unwrap();
         println!("Button released: {}", msg[0] as Button);
-
     }
 }
 
@@ -116,7 +110,7 @@ fn create_udp_thread(parse_func: fn(UdpSocket, &ChannelSender), port: u16, sende
 const SCREEN_SIZE_X: u32 = 1080;
 const SCREEN_SIZE_Y: u32 = 1920;
 
-lazy_static!{
+lazy_static! {
     static ref SCREEN_SIZE_BYTES: Vec<u8> = to_bytes(&[SCREEN_SIZE_X, SCREEN_SIZE_Y]);
 }
 
@@ -126,7 +120,7 @@ fn handle_client(mut stream: TcpStream, screen_size: Vec<u8>) {
         Ok(size) => {
             stream.write(screen_size.as_slice()).unwrap();
             true
-        },
+        }
         Err(_) => {
             println!("An error occurred, terminating connection with {}", stream.peer_addr().unwrap());
             stream.shutdown(Shutdown::Both).unwrap();
@@ -135,7 +129,7 @@ fn handle_client(mut stream: TcpStream, screen_size: Vec<u8>) {
     } {}
 }
 
-fn create_tcp_listener(){
+fn create_tcp_listener() {
     let addr = format!("0.0.0.0:{}", &TCP_PORT);
     let listener = TcpListener::bind(addr).unwrap();
 
@@ -146,7 +140,7 @@ fn create_tcp_listener(){
         match stream {
             Ok(stream) => {
                 println!("New connection: {}", stream.peer_addr().unwrap());
-                thread::spawn(move|| {
+                thread::spawn(move || {
                     // connection succeeded
                     handle_client(stream, SCREEN_SIZE_BYTES.clone())
                 });
@@ -176,14 +170,6 @@ const PRESS_BTN_PORT: u16 = 5008;
 const RELEASE_BTN_PORT: u16 = 5009;
 
 fn main() {
-    // let buf = to_bytes(&[-2i16, -3i16]);
-    // println!("{}", buf.len());
-    //
-    // let c: Vec<i16> = from_bytes(buf);
-    // for item in &c{
-    //     println!("{}", item)
-    // };
-
     let mut device = VirtualDevice::default().unwrap();
 
     create_udp_thread(parse_btn_press, PRESS_BTN_PORT, device.sender.clone());
