@@ -5,30 +5,37 @@ use std::thread::{JoinHandle, sleep};
 use std::time::{Duration, Instant};
 use mouse_keyboard_input::*;
 use lazy_static::lazy_static;
-use bytes_convert::{from_bytes, to_bytes};
+use bytes_convert::{first_value_from_bytes, from_bytes, to_bytes};
 
+type CommandCodeInMsg = i8;
+type AbsCoordInMsg = u16;
+type RelCoordInMsg = i8;
 
-type Byte = u8;
+const LEFT_MOUSE: CommandCodeInMsg = 90;
+const RIGHT_MOUSE: CommandCodeInMsg = 91;
+const MIDDLE_MOUSE: CommandCodeInMsg = 92;
 
-fn to_num(one_byte: Byte) -> Coord {
-    let mut num = one_byte as Coord;
-    if num > 128 {
-        num -= 256;
+fn to_button<S: AsRef<[u8]>>(msg: S) -> Button {
+    let command_code: CommandCodeInMsg = first_value_from_bytes(msg.as_ref());
+    if command_code <= 0 {
+        panic!("Incorrect command code: '{}'", command_code)
     }
-    num
-}
-
-const LEFT_MOUSE: Button = 90;
-const RIGHT_MOUSE: Button = 91;
-const MIDDLE_MOUSE: Button = 92;
-
-fn to_button(one_byte: Button) -> Button {
-    match one_byte {
+    match command_code {
         LEFT_MOUSE => BTN_LEFT,
         RIGHT_MOUSE => BTN_RIGHT,
         MIDDLE_MOUSE => BTN_MIDDLE,
-        _ => one_byte as Button,
+        _ => command_code as Button,
     }
+}
+
+fn to_abs_coord<S: AsRef<[u8]>>(msg: S) -> Coord {
+    let coord: AbsCoordInMsg = first_value_from_bytes(msg.as_ref());
+    coord as Coord
+}
+
+fn to_rel_coord<S: AsRef<[u8]>>(msg: S) -> Coord {
+    let coord: RelCoordInMsg = first_value_from_bytes(msg.as_ref());
+    coord as Coord
 }
 
 fn parse_btn_press(socket: UdpSocket, sender: &ChannelSender) {
@@ -36,8 +43,9 @@ fn parse_btn_press(socket: UdpSocket, sender: &ChannelSender) {
 
     loop {
         socket.recv_from(&mut msg).unwrap();
-        send_press(msg[0] as Button, sender).unwrap();
-        println!("Button pressed: {}", msg[0] as Button);
+        let button = to_button(&msg);
+        send_press(button, sender).unwrap();
+        println!("Button pressed: {}", button);
     }
 }
 
@@ -46,50 +54,46 @@ fn parse_btn_release(socket: UdpSocket, sender: &ChannelSender) {
 
     loop {
         socket.recv_from(&mut msg).unwrap();
-        send_release(msg[0] as Button, sender).unwrap();
-        println!("Button released: {}", msg[0] as Button);
+        let button = to_button(&msg);
+        send_release(button, sender).unwrap();
+        println!("Button released: {}", button);
     }
 }
 
 fn parse_scroll(socket: UdpSocket, sender: &ChannelSender) {
     let mut msg = [0; 1];
-    let mut move_by: Coord;
 
     loop {
         socket.recv_from(&mut msg).unwrap();
 
-        move_by = to_num(msg[0]);
+        let move_by = to_rel_coord(&msg);
 
         send_scroll_y(move_by, sender).unwrap();
     }
 }
 
-fn parse_mouse_x(socket: UdpSocket, sender: &ChannelSender) {
+fn parse_mouse(
+    send_func: fn(coord: Coord, sender: &ChannelSender) -> EmptyResult,
+    socket: UdpSocket,
+    sender: &ChannelSender)
+{
     let mut msg = [0; 1];
-    let mut move_by: Coord;
 
     loop {
         socket.recv_from(&mut msg).unwrap();
 
-        move_by = to_num(msg[0]);
-
-        send_mouse_move_x(move_by, sender).unwrap();
+        let move_to = to_abs_coord(&msg);
+        send_func(move_to, sender).unwrap();
     }
+}
+
+fn parse_mouse_x(socket: UdpSocket, sender: &ChannelSender) {
+    parse_mouse(send_mouse_move_x, socket, sender);
 }
 
 fn parse_mouse_y(socket: UdpSocket, sender: &ChannelSender) {
-    let mut msg = [0; 1];
-    let mut move_by: Coord;
-
-    loop {
-        socket.recv_from(&mut msg).unwrap();
-
-        move_by = to_num(msg[0]);
-
-        send_mouse_move_y(move_by, sender).unwrap();
-    }
+    parse_mouse(send_mouse_move_y, socket, sender);
 }
-
 
 fn create_udp_thread(parse_func: fn(UdpSocket, &ChannelSender), port: u16, sender: ChannelSender) -> JoinHandle<()> {
     thread::spawn(move || {
