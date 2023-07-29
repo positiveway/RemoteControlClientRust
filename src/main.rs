@@ -118,37 +118,24 @@ lazy_static! {
     static ref SCREEN_SIZE_BYTES: Vec<u8> = to_bytes(&[SCREEN_SIZE_X, SCREEN_SIZE_Y]);
 }
 
-fn handle_client(mut stream: TcpStream, screen_size: Vec<u8>) {
-    let mut data = [0u8; 1];
-    while match stream.read(&mut data) {
-        Ok(size) => {
-            stream.write(screen_size.as_slice()).unwrap();
-            true
-        }
-        Err(_) => {
-            println!("An error occurred, terminating connection with {}", stream.peer_addr().unwrap());
-            stream.shutdown(Shutdown::Both).unwrap();
-            false
-        }
-    } {}
-}
-
 fn create_tcp_listener() -> JoinHandle<()> {
     thread::spawn(move || {
-        let addr = format!("0.0.0.0:{}", &TCP_PORT);
+        let addr = format!("0.0.0.0:{}", &TCP_PC_PORT);
         let listener = TcpListener::bind(addr).unwrap();
 
-
         // accept connections and process them, spawning a new thread for each one
-        println!("TCP at port {}", &TCP_PORT);
+        println!("TCP at port {}", &TCP_PC_PORT);
         for stream in listener.incoming() {
             match stream {
-                Ok(stream) => {
-                    println!("New connection: {}", stream.peer_addr().unwrap());
-                    thread::spawn(move || {
-                        // connection succeeded
-                        handle_client(stream, SCREEN_SIZE_BYTES.clone())
-                    });
+                Ok(mut stream) => {
+                    stream.set_nonblocking(true).unwrap();
+                    let mut android_addr = stream.peer_addr().unwrap();
+                    println!("New connection: {}", android_addr.ip());
+                    stream.write_all(SCREEN_SIZE_BYTES.as_slice()).unwrap();
+
+                    // android_addr.set_port(TCP_ANDROID_PORT);
+                    // let mut android_sock = TcpStream::connect(android_addr).unwrap();
+                    // android_sock.write_all(SCREEN_SIZE_BYTES.as_slice()).unwrap();
                 }
                 Err(e) => {
                     println!("Error: {}", e);
@@ -164,7 +151,8 @@ fn create_tcp_listener() -> JoinHandle<()> {
 
 const WRITING_INTERVAL: Duration = Duration::from_millis(1);
 
-const TCP_PORT: u16 = 5100;
+const TCP_PC_PORT: u16 = 5100;
+const TCP_ANDROID_PORT: u16 = 5101;
 
 const MOUSE_PORT_X: u16 = 5004;
 const MOUSE_PORT_Y: u16 = 5005;
