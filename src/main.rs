@@ -88,7 +88,7 @@ fn parse_mouse(
 }
 
 fn parse_mouse_x(socket: UdpSocket, sender: &ChannelSender) {
-    parse_mouse(send_mouse_move_x, socket, sender);
+    parse_mouse(send_mouse_move_x, socket, sender); //FIXME:: to abs
 }
 
 fn parse_mouse_y(socket: UdpSocket, sender: &ChannelSender) {
