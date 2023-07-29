@@ -111,8 +111,8 @@ fn create_udp_thread(parse_func: fn(UdpSocket, &ChannelSender), port: u16, sende
 }
 
 
-const SCREEN_SIZE_X: u32 = 1080;
-const SCREEN_SIZE_Y: u32 = 1920;
+const SCREEN_SIZE_X: u32 = 1920;
+const SCREEN_SIZE_Y: u32 = 1080;
 
 lazy_static! {
     static ref SCREEN_SIZE_BYTES: Vec<u8> = to_bytes(&[SCREEN_SIZE_X, SCREEN_SIZE_Y]);
