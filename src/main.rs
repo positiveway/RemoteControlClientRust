@@ -128,7 +128,7 @@ fn create_tcp_listener() -> JoinHandle<()> {
         for stream in listener.incoming() {
             match stream {
                 Ok(mut stream) => {
-                    // stream.set_nonblocking(true).unwrap();
+                    stream.set_nonblocking(true).unwrap();
                     let mut android_addr = stream.peer_addr().unwrap();
                     println!("New connection: {}", android_addr.ip());
                     stream.write_all(SCREEN_SIZE_BYTES.as_slice()).unwrap();
