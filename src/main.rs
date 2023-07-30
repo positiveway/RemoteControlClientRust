@@ -128,14 +128,19 @@ fn create_tcp_listener() -> JoinHandle<()> {
         for stream in listener.incoming() {
             match stream {
                 Ok(mut stream) => {
+                    //important not to block so android can connect 2nd time immediately
                     stream.set_nonblocking(true).unwrap();
+
                     let mut android_addr = stream.peer_addr().unwrap();
-                    println!("New connection: {}", android_addr.ip());
                     stream.write_all(SCREEN_SIZE_BYTES.as_slice()).unwrap();
 
                     // android_addr.set_port(TCP_ANDROID_PORT);
-                    // let mut android_sock = TcpStream::connect(android_addr).unwrap();
-                    // android_sock.write_all(SCREEN_SIZE_BYTES.as_slice()).unwrap();
+                    // let mut to_android_stream = TcpStream::connect(android_addr).unwrap();
+                    // to_android_stream.set_nonblocking(true).unwrap();
+                    // to_android_stream.write_all(SCREEN_SIZE_BYTES.as_slice()).unwrap();
+
+                    // print in the end. It takes a long time
+                    println!("New connection: {}", android_addr.ip());
                 }
                 Err(e) => {
                     println!("Error: {}", e);
@@ -148,20 +153,21 @@ fn create_tcp_listener() -> JoinHandle<()> {
     })
 }
 
+// const WRITING_INTERVAL: Duration = Duration::from_millis(1);
 
-const WRITING_INTERVAL: Duration = Duration::from_millis(1);
+type Port = u16;
 
-const TCP_PC_PORT: u16 = 5100;
-const TCP_ANDROID_PORT: u16 = 5101;
+const TCP_PC_PORT: Port = 5100;
+const TCP_ANDROID_PORT: Port = 5101;
 
-const MOUSE_PORT_X: u16 = 5004;
-const MOUSE_PORT_Y: u16 = 5005;
+const MOUSE_PORT_X: Port = 5004;
+const MOUSE_PORT_Y: Port = 5005;
 
-const SCROLL_PORT_X: u16 = 5006;
-const SCROLL_PORT_Y: u16 = 5007;
+const SCROLL_PORT_X: Port = 5006;
+const SCROLL_PORT_Y: Port = 5007;
 
-const PRESS_BTN_PORT: u16 = 5008;
-const RELEASE_BTN_PORT: u16 = 5009;
+const PRESS_BTN_PORT: Port = 5008;
+const RELEASE_BTN_PORT: Port = 5009;
 
 fn main() {
     let mut device = VirtualDevice::default().unwrap();
