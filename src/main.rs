@@ -2,7 +2,6 @@ use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream, UdpSocket};
 use std::thread;
 use std::thread::{JoinHandle, sleep};
-use std::time::{Duration, Instant};
 use mouse_keyboard_input::*;
 use lazy_static::lazy_static;
 use bytes_convert::{first_value_from_bytes, from_bytes, to_bytes};
@@ -158,7 +157,7 @@ fn create_tcp_listener() -> JoinHandle<()> {
 type Port = u16;
 
 const TCP_PC_PORT: Port = 5100;
-const TCP_ANDROID_PORT: Port = 5101;
+// const TCP_ANDROID_PORT: Port = 5101;
 
 const MOUSE_PORT_X: Port = 5004;
 const MOUSE_PORT_Y: Port = 5005;
