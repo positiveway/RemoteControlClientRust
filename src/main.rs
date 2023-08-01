@@ -43,8 +43,8 @@ fn parse_btn_press(socket: UdpSocket, sender: &ChannelSender) {
     loop {
         socket.recv_from(&mut msg).unwrap();
         let button = to_button(&msg);
-        send_press(button, sender).unwrap();
-        println!("Button pressed: {}", button);
+        VirtualDevice::send_press(button, sender).unwrap();
+        // println!("Button pressed: {}", button);
     }
 }
 
@@ -54,8 +54,8 @@ fn parse_btn_release(socket: UdpSocket, sender: &ChannelSender) {
     loop {
         socket.recv_from(&mut msg).unwrap();
         let button = to_button(&msg);
-        send_release(button, sender).unwrap();
-        println!("Button released: {}", button);
+        VirtualDevice::send_release(button, sender).unwrap();
+        // println!("Button released: {}", button);
     }
 }
 
@@ -67,7 +67,7 @@ fn parse_scroll(socket: UdpSocket, sender: &ChannelSender) {
 
         let move_by = to_rel_coord(&msg);
 
-        send_scroll_y(move_by, sender).unwrap();
+        VirtualDevice::send_scroll_y(move_by, sender).unwrap();
     }
 }
 
@@ -87,11 +87,11 @@ fn parse_mouse(
 }
 
 fn parse_mouse_x(socket: UdpSocket, sender: &ChannelSender) {
-    parse_mouse(send_mouse_move_x, socket, sender); //FIXME:: to abs
+    parse_mouse(VirtualDevice::send_mouse_move_x, socket, sender); //FIXME:: to abs
 }
 
 fn parse_mouse_y(socket: UdpSocket, sender: &ChannelSender) {
-    parse_mouse(send_mouse_move_y, socket, sender);
+    parse_mouse(VirtualDevice::send_mouse_move_y, socket, sender);
 }
 
 fn create_udp_thread(parse_func: fn(UdpSocket, &ChannelSender), port: u16, sender: ChannelSender) -> JoinHandle<()> {
@@ -179,5 +179,5 @@ fn main() {
     create_udp_thread(parse_mouse_y, MOUSE_PORT_Y, device.sender.clone());
     create_udp_thread(parse_scroll, SCROLL_PORT_Y, device.sender.clone());
 
-    device.write_from_channel_every_ms();
+    device.flush_channel_every_interval().join().unwrap();
 }
